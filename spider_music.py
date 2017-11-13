@@ -13,6 +13,8 @@ import pandas as pd
 import csv
 import urllib.request
 import re
+# 增加信息存储到数据库
+import pymysql
 
 headers = {'accept': '*/*',
            'accept-encoding': 'gzip, deflate, br',
@@ -22,6 +24,9 @@ headers = {'accept': '*/*',
            'user-agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.62 Safari/537.36'
            }
 proxies = {'http': 'http://122.193.14.102:80'}
+
+conn = pymysql.connect(host='127.0.0.1', user='root', password='root', db='mysql',use_unicode=True,charset='utf8')
+cur = conn.cursor()
 
 
 # 1.通过全部分类歌单，得到所有的歌单的详细页面的链接
@@ -92,9 +97,8 @@ def getSongsAddress(songLists):
 
 # 3.抓取歌曲的详细信息
 def getDetailInfo(singleSongList):
-
-    with open("songs.csv", "a+",encoding='utf-8') as csvfile:
-        fieldnames = ['media_mid','name', 'singerName', 'time_public', 'genre', 'lan','url']
+    with open("songs.csv", "a+", encoding='utf-8') as csvfile:
+        fieldnames = ['media_mid', 'name', 'singerName', 'time_public', 'genre', 'lan', 'url']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         csvfile.close()
@@ -120,15 +124,13 @@ def getDetailInfo(singleSongList):
         onesong_dict['singerName'] = getOneSongInfoCallback['data'][0]['singer'][0]['name']
         # print(onesong_dict['singerName'])
         onesong_dict['time_public'] = getOneSongInfoCallback['data'][0]['album']['time_public']
-        dict01=getOneSongInfoCallback['url']
+        dict01 = getOneSongInfoCallback['url']
         print(type(getOneSongInfoCallback['url']))
         for item in dict01:
-            onesong_dict['url'] =dict01[item]
+            onesong_dict['url'] = dict01[item]
         print(onesong_dict['url'])
 
         print(re.findall(r"/(.+?)\?", onesong_dict['url']))
-
-
 
         # print(onesong_dict['time_public'])
         if 'data' in getAlbumInfoCallback.keys():
@@ -136,50 +138,102 @@ def getDetailInfo(singleSongList):
             onesong_dict['lan'] = getAlbumInfoCallback['data']['lan']
         # print(onesong_dict)
         songs.append(onesong_dict)
-        # data = pd.DataFrame(songs)
+        insertMusicTable(onesong_dict)
 
-        with open("songs.csv", "a+",encoding='utf-8') as csvfile:
-            fieldnames=['media_mid','name','singerName','time_public','genre','lan','url']
-            writer = csv.DictWriter(csvfile,fieldnames=fieldnames)
+
+        with open("songs.csv", "a+", encoding='utf-8') as csvfile:
+            fieldnames = ['media_mid', 'name', 'singerName', 'time_public', 'genre', 'lan', 'url']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writerow(onesong_dict)
             csvfile.close()
         download_music(onesong_dict)
 
 
-
 def download_music(onesong_dict):
-    filename=re.findall(r"/(.+?)\?", onesong_dict['url'])[0]
-    url='https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg?&jsonpCallback=MusicJsonCallback&cid=205361747&songmid='+onesong_dict['media_mid']+'&filename='+filename+'&guid=6612300644'
-    print('url:',url)
+    filename = re.findall(r"/(.+?)\?", onesong_dict['url'])[0]
+    url = 'https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg?&jsonpCallback=MusicJsonCallback&cid=205361747&songmid=' + \
+          onesong_dict['media_mid'] + '&filename=' + filename + '&guid=6612300644'
+    print('url:', url)
     res2 = requests.get(url)
     jm2 = json.loads(res2.text)
     print(jm2)
     print(res2.text)
     vkey = jm2['data']['items'][0]['vkey']
     print(vkey)
-    url2='http://dl.stream.qqmusic.qq.com/'+filename+'?vkey='+vkey+'&guid=6612300644&uin=0&fromtag=66'
+    url2 = 'http://dl.stream.qqmusic.qq.com/' + filename + '?vkey=' + vkey + '&guid=6612300644&uin=0&fromtag=66'
     print(url2)
     try:
-        urllib.request.urlretrieve(url2,'music/'+onesong_dict['name']+' - '+onesong_dict['singerName']+'.mp3')
+        urllib.request.urlretrieve(url2, 'music/' + onesong_dict['name'] + ' - ' + onesong_dict['singerName'] + '.mp3')
     except:
         print('Download wrong~')
 
 
+# 连接接数据库，创建music表
+def createTable():
+
+    '''
+    'media_mid','name','singerName','time_public','genre','lan','url'
+    '''
+    sql = """
+       create table if not EXISTS music
+       (
+       id int(11) not null auto_increment PRIMARY key,
+       media_mid VARCHAR(255),
+       name VARCHAR(255),
+       singerName VARCHAR(255),
+       time_public VARCHAR(255),
+       genre VARCHAR(255),
+       lan VARCHAR(255),
+       url VARCHAR(255));
+       """
+
+    try :
+        cur.execute(sql)
+        conn.commit()
+        print('成功')
+    except:
+        print('出错')
+
+#把数据插入到数据库中
+def insertMusicTable(onesong_dict):
+    # data = pd.DataFrame(songs)
+    sql = """
+            insert into music(media_mid, name, singerName, time_public, genre, lan, url)
+            VALUES(%s,%s,%s,%s,%s,%s,%s)
+           """
+    cur.execute(sql, (
+        onesong_dict['media_mid'], onesong_dict['name'], onesong_dict['singerName'], onesong_dict['time_public'],
+        onesong_dict['genre'], onesong_dict['lan'], onesong_dict['url']))
+    conn.commit()
+    # try:
+    #     cur.execute(sql,(
+    #     onesong_dict['media_mid'], onesong_dict['name'], onesong_dict['singerName'], onesong_dict['time_public'],
+    #     onesong_dict['genre'], onesong_dict['lan'], onesong_dict['url']))
+    #     conn.commit()
+    #     print('成功')
+    #
+    # except :
+    #     print('插入失败')
+
 
 if __name__ == '__main__':
+    createTable()
     # 得到所有的歌单列表
     songLists = []
     next_url, songLists = getFullSongsList()
     count = 1
-    print('count=:',count)
+    print('count=:', count)
     # while next_url :
     #     count+=1
     #     print('count=:',count)
     #     next_url, songList = getFullSongsList(next_url)
     #     songLists.extend(songList)
     # 得到所有的歌曲链接
-    #singleSongList = getSongsAddress(songLists)
+    # singleSongList = getSongsAddress(songLists)
     singleSongList = getSongsAddress(songLists[:1])
 
     # 获取歌曲信信息列表
     getDetailInfo(singleSongList)
+    #关闭数据库
+    cur.close()
+    conn.close()
