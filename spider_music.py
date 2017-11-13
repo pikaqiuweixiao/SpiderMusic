@@ -5,7 +5,7 @@ QQ音乐
 2.访问歌单详细页面，得到所有歌曲的链接
 3.抓取歌曲的详细信息
 
-最好使用代理池
+最好使用代理，防止被黑IP
 '''
 import requests
 import json
@@ -15,7 +15,7 @@ import urllib.request
 import re
 # 增加信息存储到数据库
 import pymysql
-
+import os
 headers = {'accept': '*/*',
            'accept-encoding': 'gzip, deflate, br',
            'accept-language': 'zh-CN,zh;q=0.9',
@@ -163,7 +163,12 @@ def download_music(onesong_dict):
     url2 = 'http://dl.stream.qqmusic.qq.com/' + filename + '?vkey=' + vkey + '&guid=6612300644&uin=0&fromtag=66'
     print(url2)
     try:
+        #如果music文件夹不存在，创建文件夹
+        if not os.path.exists('muisc'):
+            os.mkdir('music')
+
         urllib.request.urlretrieve(url2, 'music/' + onesong_dict['name'] + ' - ' + onesong_dict['singerName'] + '.mp3')
+
     except:
         print('Download wrong~')
 
@@ -190,7 +195,7 @@ def createTable():
     try :
         cur.execute(sql)
         conn.commit()
-        print('成功')
+        #print('成功')
     except:
         print('出错')
 
@@ -201,19 +206,16 @@ def insertMusicTable(onesong_dict):
             insert into music(media_mid, name, singerName, time_public, genre, lan, url)
             VALUES(%s,%s,%s,%s,%s,%s,%s)
            """
-    cur.execute(sql, (
+
+    try:
+        cur.execute(sql,(
         onesong_dict['media_mid'], onesong_dict['name'], onesong_dict['singerName'], onesong_dict['time_public'],
         onesong_dict['genre'], onesong_dict['lan'], onesong_dict['url']))
-    conn.commit()
-    # try:
-    #     cur.execute(sql,(
-    #     onesong_dict['media_mid'], onesong_dict['name'], onesong_dict['singerName'], onesong_dict['time_public'],
-    #     onesong_dict['genre'], onesong_dict['lan'], onesong_dict['url']))
-    #     conn.commit()
-    #     print('成功')
-    #
-    # except :
-    #     print('插入失败')
+        conn.commit()
+        print('插入成功')
+
+    except :
+        print('插入失败')
 
 
 if __name__ == '__main__':
